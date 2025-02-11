@@ -1,0 +1,43 @@
+[package]
+name = "playground"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+esp-alloc = "0.6.0"
+esp-backtrace = { version = "0.15.0", features = ["esp32s3", "exception-handler", "panic-handler", "println"] }
+esp-hal-embassy = { version = "0.6.0", features = ["esp32s3", "log"] }
+esp-hal = { version = "0.23.1", features = ["esp32s3", "log", "unstable"] }
+esp-println = { version = "0.13.0", features = ["esp32s3", "log"] }
+esp-wifi = { version = "0.12.0", features = ["esp32s3", "log", "smoltcp", "utils", "wifi", "xtensa-lx-rt"] }
+
+embedded-io = "0.6.1"
+embassy-net = { version = "0.6.0", features = ["dns", "log", "medium-ethernet", "multicast", "proto-ipv4", "tcp"] }
+
+heapless = { version = "0.8.0", default-features = false }
+smoltcp = { version = "0.12.0", default-features = false, features = ["medium-ethernet", "proto-dhcpv4", "proto-ipv4", "socket-dhcpv4", "socket-icmp", "socket-raw", "socket-tcp", "socket-udp"] }
+critical-section = "1.2.0"
+embassy-executor = "0.7.0"
+fugit = "0.3.7"
+as5600 = "0.8.0"
+log = "0.4.25"
+tap = "1.0.1"
+foc = "0.3.0"
+fixed = "1.28.0"
+embedded-hal = "1.0.0"
+cordic = "0.1.5"
+mod_use = "0.2.3"
+
+[profile.dev]
+# Rust debug is too slow.
+# For debug builds always builds with some optimization
+opt-level = "s"
+
+[profile.release]
+codegen-units = 1        # LLVM can perform better optimizations using a single thread
+debug = 2
+debug-assertions = false
+incremental = false
+lto = 'fat'
+opt-level = 's'
+overflow-checks = false
