@@ -6,10 +6,9 @@ edition = "2021"
 [dependencies]
 esp-alloc = "0.6.0"
 esp-backtrace = { version = "0.15.0", features = ["esp32s3", "exception-handler", "panic-handler", "println"] }
-esp-hal-embassy = { version = "0.6.0", features = ["esp32s3", "log"] }
-esp-hal = { version = "0.23.1", features = ["esp32s3", "log", "unstable"] }
+esp-hal = { version = "1.0.0-beta.0", features = ["esp32s3", "log", "unstable"] }
 esp-println = { version = "0.13.0", features = ["esp32s3", "log"] }
-esp-wifi = { version = "0.12.0", features = ["esp32s3", "log", "smoltcp", "utils", "wifi", "xtensa-lx-rt"] }
+esp-wifi = { version = "0.13.0", features = ["esp32s3", "log", "smoltcp", "wifi", "xtensa-lx-rt"] }
 
 embedded-io = "0.6.1"
 embassy-net = { version = "0.6.0", features = ["dns", "log", "medium-ethernet", "multicast", "proto-ipv4", "tcp"] }
@@ -22,15 +21,20 @@ fugit = "0.3.7"
 as5600 = "0.8.0"
 log = "0.4.25"
 tap = "1.0.1"
-foc = "0.3.0"
 fixed = "1.28.0"
 embedded-hal = "1.0.0"
 cordic = "0.1.5"
 mod_use = "0.2.3"
+piddiy = "0.1.2"
+num-traits = { version = "0.2.19", default-features = false }
+slint = { version = "1.10.0", default-features = false, features = ["compat-1-2", "libm", "renderer-software", "unsafe-single-threaded"] }
+static_cell = { version = "2.1.0", features = ["nightly"] }
+bytemuck = { version = "1.22.0", features = ["latest_stable_rust"] }
+
+[build-dependencies]
+slint-build = "1.10.0"
 
 [profile.dev]
-# Rust debug is too slow.
-# For debug builds always builds with some optimization
 opt-level = "s"
 
 [profile.release]
@@ -41,3 +45,7 @@ incremental = false
 lto = 'fat'
 opt-level = 's'
 overflow-checks = false
+
+[profile.release-with-debug]
+inherits = "release"
+debug = true

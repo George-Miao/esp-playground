@@ -4,56 +4,57 @@
 
 extern crate alloc;
 
+use core::f32::consts::PI;
+
 use esp_backtrace as _;
 use esp_hal::{
     clock::CpuClock,
     i2c::master::{Config, I2c},
-};
-use esp_hal::{
-    gpio::{Level, Output},
     xtensa_lx_rt::entry,
 };
 use log::info;
+use playground::sensor::Sensor;
 use tap::Pipe;
 
 #[entry]
 fn main() -> ! {
     esp_println::logger::init_logger_from_env();
     esp_alloc::heap_allocator!(72 * 1024);
+    let peripherals: esp_hal::peripherals::Peripherals =
+        esp_hal::init(esp_hal::Config::default().with_cpu_clock(CpuClock::max()));
 
-    let peripherals: esp_hal::peripherals::Peripherals = esp_hal::init({
-        let mut config = esp_hal::Config::default();
-        config.cpu_clock = CpuClock::max();
-        config
-    });
-
-    let mut led = Output::new(peripherals.GPIO4, Level::Low);
-    let mut mag = I2c::new(peripherals.I2C0, Config::default())
+    let encoder = I2c::new(peripherals.I2C0, Config::default())
         .unwrap()
-        .with_scl(peripherals.GPIO18)
-        .with_sda(peripherals.GPIO17)
+        .with_scl(peripherals.GPIO12)
+        .with_sda(peripherals.GPIO11)
         .pipe(as5600::As5600::new);
 
-    let mut prev = 0;
-    let start = mag.angle();
-    let delay = esp_hal::delay::Delay::new();
+    let mut sensor = Sensor::new(encoder);
+    let mut tick: u64 = 0;
+    let step = PI / 2.;
 
     loop {
-        delay.delay_millis(1);
-        let curr = mag.angle().unwrap();
-        if curr > prev && curr - prev > 4000 {
-            info!("-= 1");
+        tick += 1;
+
+        sensor.update().unwrap();
+        let state = sensor.state();
+
+        let total_angle = state.total_angle();
+
+        // Find the nearest step
+        let mut error = -state.angle() % step;
+        if error.abs() > 0.5 * step {
+            error += -1. * error.signum() * step;
         }
-        if curr < prev && prev - curr > 4000 {
-            info!("+= 1");
+
+        if tick % 100 == 0 {
+            // log::info!(
+            //     "{:.2} --({:.2})--> {:.2}",
+            //     total_angle / (2. * PI),
+            //     error / (2. * PI),
+            //     (total_angle + error) / (2. * PI),
+            // );
+            log::info!("{}", state.velocity())
         }
-        if curr.abs_diff(prev) <= 1 {
-            led.set_low();
-            continue;
-        }
-        led.set_high();
-        prev = curr;
-        let real_angle = curr as f32 * 360.0 / 4096.0;
-        info!("{real_angle:.2}° - {curr}");
     }
 }

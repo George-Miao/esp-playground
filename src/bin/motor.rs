@@ -8,61 +8,109 @@ use core::f32::consts::PI;
 use esp_backtrace as _;
 use esp_hal::{
     clock::CpuClock,
+    gpio::{Input, Output, Pull},
     i2c::{self, master::I2c},
-    mcpwm::{operator::PwmPinConfig, timer::PwmWorkingMode, McPwm},
+    mcpwm::{McPwm, PeripheralClockConfig, operator::PwmPinConfig, timer::PwmWorkingMode},
+    time::{Instant, Rate},
+    xtensa_lx_rt::entry,
 };
-use esp_hal::{gpio::Output, time::RateExtU32};
-use esp_hal::{mcpwm::PeripheralClockConfig, xtensa_lx_rt::entry};
-
-use playground::motor::{ThreePhasePwm, BLDC};
+use log::info;
+use playground::{
+    motor::{BLDC, ThreePhasePwm},
+    util::Velocity,
+};
+use tap::Pipe;
 
 #[entry]
 fn main() -> ! {
     esp_println::logger::init_logger_from_env();
     esp_alloc::heap_allocator!(72 * 1024);
+    let peripherals: esp_hal::peripherals::Peripherals =
+        esp_hal::init(esp_hal::Config::default().with_cpu_clock(CpuClock::max()));
 
-    let peripherals: esp_hal::peripherals::Peripherals = esp_hal::init({
-        let mut config = esp_hal::Config::default();
-        config.cpu_clock = CpuClock::max();
-        config
-    });
+    // let button = Input::new(peripherals.GPIO7, Pull::None);
+    let mut en = Output::new(
+        peripherals.GPIO4,
+        esp_hal::gpio::Level::High,
+        Default::default(),
+    );
+    let in1 = peripherals.GPIO7;
+    let in2 = peripherals.GPIO6;
+    let in3 = peripherals.GPIO5;
 
-    let _en = Output::new(peripherals.GPIO3, esp_hal::gpio::Level::High);
-    let in1 = peripherals.GPIO10;
-    let in2 = peripherals.GPIO9;
-    let in3 = peripherals.GPIO46;
-
-    let clock_cfg = PeripheralClockConfig::with_frequency(32.MHz()).unwrap();
+    let clock_cfg = PeripheralClockConfig::with_frequency(Rate::from_mhz(16)).unwrap();
     let mut mcpwm = McPwm::new(peripherals.MCPWM0, clock_cfg);
 
-    let a = mcpwm
+    let mut a = mcpwm
         .operator0
         .with_pin_a(in1, PwmPinConfig::UP_ACTIVE_HIGH);
 
-    let b = mcpwm
+    let mut b = mcpwm
         .operator1
         .with_pin_a(in2, PwmPinConfig::UP_ACTIVE_HIGH);
 
-    let c = mcpwm
+    let mut c = mcpwm
         .operator2
         .with_pin_a(in3, PwmPinConfig::UP_ACTIVE_HIGH);
 
     let timer_clock_cfg = clock_cfg
-        .timer_clock_with_frequency(99, PwmWorkingMode::Increase, 20.kHz())
+        .timer_clock_with_frequency(99, PwmWorkingMode::Increase, Rate::from_khz(20))
         .unwrap();
 
     mcpwm.timer0.start(timer_clock_cfg);
 
-    let i2c = I2c::new(peripherals.I2C0, i2c::master::Config::default())
-        .unwrap()
-        .with_scl(peripherals.GPIO18)
-        .with_sda(peripherals.GPIO17);
+    // a.set_timestamp(100);
+    // b.set_timestamp(100);
+    // c.set_timestamp(100);
 
-    let mut drive = BLDC::new::<7>(i2c, ThreePhasePwm { a, b, c }, 8.)
+    // loop {}
+
+    let encoder = I2c::new(peripherals.I2C0, i2c::master::Config::default())
+        .unwrap()
+        .with_scl(peripherals.GPIO12)
+        .with_sda(peripherals.GPIO11)
+        .pipe(as5600::As5600::new);
+
+    let mut drive = BLDC::new::</* Pole Pair Number */ 7>(ThreePhasePwm { a, b, c })
+        .with_voltage_power_supply(12.)
+        .with_sensor(encoder)
+        // .with_phase_inductance(0.86 * 1e-3) // 0.86mH
+        // .with_phase_resistance(2.3) // 2.3 Ohm
+        // .with_kv(220.) // 220 RPM/V
         .aligned()
-        .foc(4. * PI);
+        .unwrap()
+        .foc()
+        // .open_loop(PI * 2.);
+        // .to_torque(PI);
+        // .to_angle(0.);
+        .to_ratchet(5);
+    // .to_velocity(10 * Velocity::RPS);
+
+    let mut last_sampling = (0., Instant::now());
+    let mut tick = 0;
+    let mut button_cooldown_start = Instant::EPOCH;
 
     loop {
-        drive.tick();
+        // if button.is_high() && (now() - button_cooldown_start).to_millis() > 200 {
+        //     log::info!("Button pressed, toggle motor");
+        //     en.toggle();
+        //     button_cooldown_start = now();
+        // }
+
+        // if en.is_set_low() {
+        //     continue;
+        // }
+
+        // if tick % 1000 == 0 {
+        //     let (last, time) = last_sampling;
+        //     let now = now();
+        //     let curr = drive.sensor().state().total_angle();
+        //     let vel = Velocity::rad(curr - last).per(now - time);
+        //     log::info!("{vel}");
+        //     last_sampling = (curr, now);
+        // }
+
+        tick += 1;
+        drive.tick().unwrap()
     }
 }

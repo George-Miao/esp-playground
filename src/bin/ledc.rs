@@ -5,23 +5,19 @@
 extern crate alloc;
 
 use esp_backtrace as _;
-use esp_hal::time::RateExtU32;
-use esp_hal::xtensa_lx_rt::entry;
 use esp_hal::{
     clock::CpuClock,
     ledc::{channel::ChannelIFace, timer::TimerIFace, *},
+    time::Rate,
+    xtensa_lx_rt::entry,
 };
 
 #[entry]
 fn main() -> ! {
     esp_println::logger::init_logger_from_env();
     esp_alloc::heap_allocator!(72 * 1024);
-
-    let peripherals: esp_hal::peripherals::Peripherals = esp_hal::init({
-        let mut config = esp_hal::Config::default();
-        config.cpu_clock = CpuClock::max();
-        config
-    });
+    let peripherals: esp_hal::peripherals::Peripherals =
+        esp_hal::init(esp_hal::Config::default().with_cpu_clock(CpuClock::max()));
 
     let mut ledc = Ledc::new(peripherals.LEDC);
     ledc.set_global_slow_clock(LSGlobalClkSource::APBClk);
@@ -31,7 +27,7 @@ fn main() -> ! {
         .configure(timer::config::Config {
             duty: timer::config::Duty::Duty5Bit,
             clock_source: timer::LSClockSource::APBClk,
-            frequency: 24.kHz(),
+            frequency: Rate::from_khz(24),
         })
         .unwrap();
 
